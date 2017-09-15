@@ -1,0 +1,38 @@
+version: '3'
+services:
+  clerk:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - clerk.env     
+    depends_on:
+      - db
+    volumes:
+      - .:/clerk
+    command: ruby clerk.rb
+    tty: true
+    stdin_open: true
+
+
+  db:
+    image: postgres
+    volumes:
+      - "./.docker/postgres:/data/postgres"
+      - "./.docker/backups:/data/backups"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=clerk
+      - PGDATA=/data/postgres
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
