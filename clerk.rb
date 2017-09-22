@@ -27,7 +27,7 @@ class Scraper
 		end
 		
 		sites_dataset = @@DB[:sites]
-		minutes = 1
+		minutes = 3
 		loop do
 			time_ago = DateTime.now - (minutes/1440.0)
 			sites = sites_dataset.where{last_visited < time_ago}
@@ -101,7 +101,8 @@ class Scraper
 		claims.each do |claim|
 			hash = Digest::SHA256.hexdigest claim.to_json
 			next unless claims_dataset.first(hash: hash).nil?
-			id = claims_dataset.insert(claim_data: claim.to_json, hash:hash, last_visited: Time.now)
+			claim_object = Claim.create(claim_data: Claim.json_from_microdata(claim), hash:hash, last_visited: Time.now)
+			byebug
 		end
 	end
 
@@ -134,6 +135,7 @@ def run
 	@@DB = Database.new.setup
 
 	require_relative 'models/site'
+	require_relative 'models/claim'
 
 	scraper =	Scraper.new
 	scraper.url = ENV['URL']
