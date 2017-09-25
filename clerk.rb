@@ -7,6 +7,7 @@ require 'time_difference'
 
 require_relative 'models/database'
 
+
 class Scraper
 
 	@url = nil
@@ -16,22 +17,31 @@ class Scraper
 
 	def scrape
 		raise "No URL set for this instance of 'Scraper'" if @url.nil?
-		@agent = Mechanize.new
-		url, links = scrape_page ENV['URL']
-		
-		if links.nil?
-			print "\n**************\n"
-			print "Page has been scanned recently, to force use... something\n"
-			print "**************\n\n"
-			return
-		end
-		
+
 		sites_dataset = @@DB[:sites]
+		url = ENV['URL']
+		sites = Site.where{url == url}
+
+		if sites.count < 1
+			Site.create(url: url, base_url:ENV['URL'])
+			sites = Site.where{url == url}
+		end
+
+		@agent = Mechanize.new
+		url, links = scrape_page sites.first
+		save_sites links
+		
+		# if links.nil?
+		# 	print "\n**************\n"
+		# 	print "Page has been scanned recently, to force use... something\n"
+		# 	print "**************\n\n"
+		# 	return
+		# end
+		
 		minutes = 3
 		loop do
 			time_ago = DateTime.now - (minutes/1440.0)
-			sites = sites_dataset.where{last_visited < time_ago}
-			
+			sites = Site.where{last_visited < time_ago}
 			if sites.nil? || sites.all.count == 0
 				print "\n**************\n"
 				print "Sleeping for #{60 * minutes}\n"
@@ -40,16 +50,16 @@ class Scraper
 				sleep 60 * minutes
 				next
 			end
-
+			
 			sites.each do |site|
-				url, links = scrape_page site[:url]
+				url, links = scrape_page site
 				
 				next if links.nil?
-
-				links.each do |link|
-					new_url, new_links = scrape_page link.href
-					save_sites new_links
-				end
+				save_sites links
+#				links.each do |link|
+					#new_url, new_links = scrape_page link.href
+#					save_sites new_links
+#				end
 			end
 
 			print "\n**************\n"
@@ -59,7 +69,14 @@ class Scraper
 		end
 	end
 
-	def scrape_page url
+	def scrape_page site
+		
+		begin
+			url = site[:url]
+		rescue Exception => e
+			byebug
+		end
+
 		# If it's an off-page link, ignore it
 		return unless url.start_with?(ENV['URL'])
 
@@ -73,20 +90,18 @@ class Scraper
 		sites_dataset = @@DB[:sites]
 
 		# Attempt to find if the site is in the database already
-		site = sites_dataset.first(url: url)
+		site = Site.first(url: url)
 		# If the site's in the database, and has been visited in the last day, skip it.
-		return if site.nil? == false && TimeDifference.between(site[:last_visited], Time.now).in_hours < 0
+		return if TimeDifference.between(site[:last_visited], Time.now).in_hours < 0
 	
-		if site.nil?
-			sites_dataset.insert(url: url, base_url: ENV['URL'])
-		else 
-			site.update(last_visited: Time.now)
-		end
-
 		pp "Scraping: #{url}"
 
 		found_claims = search_for_microdata page.content
-		save_claims(found_claims)
+		save_claims(found_claims, site)
+
+		site.last_visited = Time.now
+		site.save
+
 		return url, page.links
 	end
 
@@ -95,14 +110,15 @@ class Scraper
 		claims = parsed.search(%r{http://schema.org/ClaimReview}i)
 	end
 
-	def save_claims claims
+	def save_claims claims, site
 		claims_dataset = @@DB[:claims]
 
 		claims.each do |claim|
-			hash = Digest::SHA256.hexdigest claim.to_json
-			next unless claims_dataset.first(hash: hash).nil?
-			claim_object = Claim.create(claim_data: Claim.json_from_microdata(claim), hash:hash, last_visited: Time.now)
-			byebug
+			hashed_json = Digest::SHA256.hexdigest claim.to_json
+			next unless claims_dataset.first(hash: hashed_json).nil?
+			json = Claim.json_from_microdata(claim)
+			next if json.nil?
+			claim_object = Claim.create(claim_data: json, hash:hashed_json, last_visited: Time.now, site_id: site[:id])
 		end
 	end
 
@@ -112,8 +128,9 @@ class Scraper
 		return if sites.nil?
 
 		sites.each do |site|
-			next unless sites_dataset.first(url: site.href).nil?
-			id = sites_dataset.insert(url: site.href, base_url:ENV['URL'])
+			next unless Site.first(url: site.href).nil?
+			next unless site.href.start_with? ENV['URL']
+			id = Site.create(url: site.href, base_url:ENV['URL'])
 		end
 	end
 

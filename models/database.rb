@@ -22,7 +22,7 @@ class Database
 			  String 		  :url
 			  String			:base_url
 			  Timestamp			:first_visted, default: Sequel::CURRENT_TIMESTAMP
-			  Timestamp		  :last_visited, default: Sequel::CURRENT_TIMESTAMP
+			  Timestamp		  :last_visited, default: '1970-01-01 00:00:00'
 			  index [:url]
 			  unique [:url, :base_url]
 			end
@@ -35,7 +35,7 @@ class Database
 			  JSONB      :claim_data
 				foreign_key :site_id, 			:sites
 			  Timestamp			:first_visted, default: Sequel::CURRENT_TIMESTAMP
-			  Timestamp		  :last_visited, default: Sequel::CURRENT_TIMESTAMP
+			  Timestamp		  :last_visited, default: '1970-01-01 00:00:00'
 			  index [:hash]
 			end
 		end
@@ -45,10 +45,10 @@ class Database
 	def wait_for_database
 		print "Checking for postgres...\n"
 		x = 0
-		while x < 3
+		while x < 6
 			begin
 				db = Sequel.connect('postgres://postgres:postgres@db/clerk')
-				x = 3
+				x = 6
 			rescue Sequel::DatabaseConnectionError
 				print "Waiting for postgres to come up...\n"
 				print "**************************\n\n"

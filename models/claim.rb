@@ -18,6 +18,7 @@ class Claim < Sequel::Model
   	begin
 	  	properties = microdata.properties
 	  	url = properties['url'][0]
+	  	source_url = 	
 	  	image = {}
 	  	image[:url] = properties['image'][0].properties['url'][0]
 	  	image[:width] = properties['image'][0].properties['width'][0]
@@ -30,7 +31,7 @@ class Claim < Sequel::Model
 			item_reviewed = {}
 			item_reviewed[:author] = {}
 			item_reviewed[:author][:name] = properties['itemReviewed'][0].properties['author'][0].properties['name'][0]
-			item_reviewed[:author][:same_as] = properties['itemReviewed'][0].properties['author'][0].properties['sameAs'][0]
+			item_reviewed[:author][:same_as] = properties['itemReviewed'][0].properties['author'][0].properties['sameAs'][0] if properties['itemReviewed'][0].properties['author'][0].properties.has_key?('sameAs')
 			review_rating = {}
 			review_rating[:best_rating] = properties['reviewRating'][0].properties['bestRating'][0]
 			review_rating[:rating_value] = properties['reviewRating'][0].properties['ratingValue'][0]
@@ -39,7 +40,7 @@ class Claim < Sequel::Model
 			claim_reviewed = properties['claimReviewed'][0]
 			date_published = properties['datePublished'][0]
 		rescue Exception => e
-			byebug
+			return nil
 		end
 
 	 	data = {}
@@ -49,25 +50,25 @@ class Claim < Sequel::Model
 	 	data[:url] = url
 	 	data[:author] = {}
 	 	data[:author][:@type] = "Organization"
-	 	data[:author][:url] = author[:url] if author.has_key? 'url'
-	 	data[:author][:name] = author[:name] if author.has_key? 'name'
-	 	data[:author][:sameAs] = author[:same_as] if author.has_key? 'same_as'
+	 	data[:author][:url] = author[:url] if author.has_key? :url
+	 	data[:author][:name] = author[:name] if author.has_key? :name
+	 	data[:author][:sameAs] = author[:same_as] if author.has_key? :same_as
 	 	data[:claimReviewed] = claim_reviewed
 	 	data[:reviewRating] = {}
 	 	data[:reviewRating][:@type] = 'Rating'
 	 	data[:reviewRating][:ratingValue] = review_rating[:rating_value]
 	 	data[:reviewRating][:bestRating] = review_rating[:best_rating]
 	 	data[:reviewRating][:worstRating] = review_rating[:worst_rating]
-	 	data[:reviewRating][:alternateName] = review_rating[:alternate_name] if review_rating.has_key? 'alternate_name'
-	 	data[:reviewRating][:image] = review_rating[:image] if review_rating.has_key? 'image'
+	 	data[:reviewRating][:alternateName] = review_rating[:alternate_name] if review_rating.has_key? :alternate_name
+	 	data[:reviewRating][:image] = review_rating[:image] if review_rating.has_key? :image
 	 	data[:itemReviewed] = {}
 	 	data[:itemReviewed][:@type] = "CreativeWork"
 	 	data[:itemReviewed][:author] = {}
 	 	data[:itemReviewed][:author][:@type] = "Person"
 	 	data[:itemReviewed][:author][:name] = item_reviewed[:author][:name]
-	 	data[:itemReviewed][:author][:sameAs] = item_reviewed[:author][:same_as] if item_reviewed.has_key? 'same_as'
-	 	data[:itemReviewed][:author][:jobTitle] = item_reviewed[:author][:job_title] if item_reviewed.has_key? 'job_title'
-	 	data[:itemReviewed][:author][:image] = item_reviewed[:author][:image] if item_reviewed.has_key? 'image'
+	 	data[:itemReviewed][:author][:sameAs] = item_reviewed[:author][:same_as] if item_reviewed.has_key? :same_as
+	 	data[:itemReviewed][:author][:jobTitle] = item_reviewed[:author][:job_title] if item_reviewed.has_key? :job_title
+	 	data[:itemReviewed][:author][:image] = item_reviewed[:author][:image] if item_reviewed.has_key? :image
 
 	 	return data.to_json
   end
@@ -294,8 +295,9 @@ class Claim < Sequel::Model
 		options[:client_uuid] = ENV['CLIENT_UUID']
 		options[:api_key] = ENV['API_KEY']
 		options[:fact] = JSON.parse(self.claim_data)
-		byebug
 		options[:fact][:full_text] = self.claim_data
+		options[:fact][:source_url] = self.site.url
+		options[:fact][:site_id] = self.site_id
 		options[:fact][:microdata] = self.claim_data
 		return options
 	end
