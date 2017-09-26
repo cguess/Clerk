@@ -41,7 +41,6 @@ class Scraper
 		minutes = 24*60
 		loop do
 			time_ago = DateTime.now - (minutes/1440.0)
-			byebug
 			sites = Site.where{last_visited < time_ago}
 			if sites.nil? || sites.all.count == 0
 				print "\n**************\n"
