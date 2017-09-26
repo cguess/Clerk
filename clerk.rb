@@ -102,7 +102,13 @@ class Scraper
 		site.last_visited = Time.now
 		site.save
 
-		return url, page.links
+		begin
+			links = page.links
+		rescue Exception => e
+			links = []
+		end
+
+		return url, links
 	end
 
 	def search_for_microdata content
