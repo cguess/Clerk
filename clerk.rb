@@ -38,9 +38,10 @@ class Scraper
 		# 	return
 		# end
 		
-		minutes = 3
+		minutes = 24*60
 		loop do
 			time_ago = DateTime.now - (minutes/1440.0)
+			byebug
 			sites = Site.where{last_visited < time_ago}
 			if sites.nil? || sites.all.count == 0
 				print "\n**************\n"
@@ -128,9 +129,14 @@ class Scraper
 		return if sites.nil?
 
 		sites.each do |site|
-			next unless Site.first(url: site.href).nil?
-			next unless site.href.start_with? ENV['URL']
-			id = Site.create(url: site.href, base_url:ENV['URL'])
+			begin
+				next unless Site.first(url: site.href).nil?
+				next unless site.href.start_with? ENV['URL']
+				id = Site.create(url: site.href, base_url:ENV['URL'])
+			rescue Exception => e
+				puts "Error saving site: " + site.to_s
+				next
+			end
 		end
 	end
 
