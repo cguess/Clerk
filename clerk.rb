@@ -27,7 +27,14 @@ class Scraper
 			sites = Site.where{url == url}
 		end
 
-		@agent = Mechanize.new
+		@agent = Mechanize.new { |a|
+		  a.post_connect_hooks << lambda { |_,_,response,_|
+		    if response.content_type.nil? || response.content_type.empty?
+		      response.content_type = 'text/html'
+		    end
+		  }
+		}
+
 		url, links = scrape_page sites.first
 		save_sites links
 		
@@ -87,6 +94,8 @@ class Scraper
 			return
 		end
 
+		return nil unless page.class == Mechanize::Page
+
 		sites_dataset = @@DB[:sites]
 
 		# Attempt to find if the site is in the database already
@@ -96,8 +105,12 @@ class Scraper
 	
 		pp "Scraping: #{url}"
 
+
 		found_claims = search_for_microdata page.content
-		save_claims(found_claims, site)
+		found_json_claims = search_for_json page
+
+		save_claims(found_claims, site, true)
+		save_claims(found_json_claims, site, false)
 
 		site.last_visited = Time.now
 		site.save
@@ -116,13 +129,43 @@ class Scraper
 		claims = parsed.search(%r{http://schema.org/ClaimReview}i)
 	end
 
-	def save_claims claims, site
+	def search_for_json content
+		elements = content.css("script[type='application/ld+json']")
+		claims = []
+		elements.each do |element|
+			text = element.text
+			begin
+				json = JSON.parse text
+			rescue Exception => e
+				#byebug
+				next
+			end
+			
+			next unless json.has_key?('@context') && json['@context'] == 'http://schema.org'
+			next unless json.has_key?('@type')
+			case json['@type'].class
+			when Array.class
+				next unless json['@type'].include?('ClaimReview')
+			when String.class
+				next unless json['@type'] == 'ClaimReview'
+			else
+				next
+			end
+
+			claims << json
+		end
+
+		return claims
+	end
+
+	def save_claims claims, site, microdata=true
 		claims_dataset = @@DB[:claims]
 
 		claims.each do |claim|
 			hashed_json = Digest::SHA256.hexdigest claim.to_json
 			next unless claims_dataset.first(hash: hashed_json).nil?
-			json = Claim.json_from_microdata(claim)
+
+			json = microdata ? Claim.json_from_microdata(claim) : claim.to_json
 			next if json.nil?
 			claim_object = Claim.create(claim_data: json, hash:hashed_json, last_visited: Time.now, site_id: site[:id])
 		end
