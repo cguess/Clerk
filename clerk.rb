@@ -81,7 +81,8 @@ class Scraper
 		begin
 			url = site[:url]
 		rescue Exception => e
-			byebug
+			return nil
+#			byebug
 		end
 
 		# If it's an off-page link, ignore it
@@ -132,6 +133,7 @@ class Scraper
 	def search_for_json content
 		elements = content.css("script[type='application/ld+json']")
 		claims = []
+
 		elements.each do |element|
 			text = element.text
 			begin
@@ -141,7 +143,7 @@ class Scraper
 				next
 			end
 			
-			next unless json.has_key?('@context') && json['@context'] == 'http://schema.org'
+			next unless json.has_key?('@context') && json['@context'] == 'http://schema.org' || json['@context'] == 'https://schema.org'
 			next unless json.has_key?('@type')
 			case json['@type'].class
 			when Array.class
@@ -181,8 +183,9 @@ class Scraper
 				next unless Site.first(url: site.href).nil?
 				next unless site.href.start_with? ENV['URL']
 				id = Site.create(url: site.href, base_url:ENV['URL'])
+				puts "Saved: #{site.href}"
 			rescue Exception => e
-				puts "Error saving site: " + site.to_s
+				#puts "Error saving site: " + site.to_s
 				next
 			end
 		end
